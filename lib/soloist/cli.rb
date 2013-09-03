@@ -1,4 +1,5 @@
-require "librarian/chef/cli"
+require "librarian/chef/cli" if Gem.available?('librarian-chef')
+require "berkshelf/cli" if Gem.available?('berkshelf')
 require "soloist/remote_config"
 require "soloist/spotlight"
 require "awesome_print"
@@ -13,7 +14,8 @@ module Soloist
     method_option :remote, :aliases => "-r", :desc => "Run chef-solo on user@host"
     method_option :identity, :aliases => "-i", :desc => "The SSH identity file"
     def chef
-      install_cookbooks if cheffile_exists?
+      install_cookbooks_from_cheffile if cheffile_exists?
+      install_cookbooks_from_berksfile if berksfile_exists?
       soloist_config.run_chef
     end
 
@@ -31,11 +33,17 @@ module Soloist
     end
 
     no_tasks do
-      def install_cookbooks
+      def install_cookbooks_from_cheffile
         Dir.chdir(File.dirname(rc_path)) do
           Librarian::Chef::Cli.with_environment do
             Librarian::Chef::Cli.new.install
           end
+        end
+      end
+
+      def install_cookbooks_from_berksfile
+        Dir.chdir(File.dirname(rc_path)) do
+          Berkshelf::Cli::Runner.new(%w[install -p vendor/cookbooks]).execute!
         end
       end
 
@@ -65,6 +73,10 @@ module Soloist
 
     def cheffile_exists?
       File.exists?(File.expand_path("../Cheffile", rc_path))
+    end
+
+    def berksfile_exists?
+      File.exists?(File.expand_path("../Berksfile.lock", rc_path))
     end
 
     def rc_path
